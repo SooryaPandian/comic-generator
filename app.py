@@ -11,7 +11,7 @@ def generate_story_elements():
     data = request.json
     try:
         # Generate main title if needed
-        print('generate_title', data.get('generate_title'))
+        # print('generate_title', data.get('generate_title'))
         if data.get('generate_title'):
             title_prompt = f'''
             Generate a random title for a commic along with description.
@@ -30,8 +30,8 @@ def generate_story_elements():
             response = title_response['response'].strip().replace('"', '')
             main_title = response.split('\n')[0]
             description= "".join(response.split('\n')[1:])
-            print("This is the generate title",main_title ),
-            print("This is the generate description",response)
+            # print("This is the generate title",main_title ),
+            # print("This is the generate description",response)
         else:
             main_title = data['title']
             description = data['description']
@@ -90,7 +90,7 @@ def generate_story_elements():
                 titles.append(line.split('. ', 1)[-1].strip())
             elif current_section == 'descriptions' and re.match(r'\d+\.', line):
                 page_descriptions.append(line.split('. ', 1)[-1].strip())  
-        print("This is the page descriptions", page_descriptions)
+        # print("This is the page descriptions", page_descriptions)
         return jsonify({
             'main_title': main_title,
             'description': description,
@@ -127,8 +127,9 @@ def regenerate_single_title():
 @app.route('/generate/page', methods=['POST'])
 def generate_page():
     data = request.json
-    print("this is the data",data)
+    # print("this is the data",data)
     try:
+        print(data.get('previous_development', 'None'))
         prompt = f"""
         Story:  {data['main_title']} - {data['description']}
         All page titles: {', '.join(data['all_titles'])}
@@ -171,6 +172,7 @@ def generate_page():
         )
         
         content = response['response'].strip()
+        
         sections = {
             'content': '',
             'key_developments': [],
@@ -187,13 +189,14 @@ def generate_page():
                 current_section = 'next_suggestions'
             elif current_section == 'content':
                 sections['content'] += line + '\n'
-            elif current_section == 'key_developments' and line.startswith('-'):
-                sections['key_developments'].append(line[2:].strip())
+            elif current_section == 'key_developments':
+                sections['key_developments'].append(line.strip())
             elif current_section == 'next_suggestions':
                 if line.strip():
                 # if line.strip() and not line.startswith('**'):
                     sections['next_suggestions'].append(line.strip())
-        # print("This is the content",sections)
+                
+        
         return jsonify({
             'content': sections['content'].strip(),
             'key_developments': sections['key_developments'],

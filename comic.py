@@ -256,18 +256,16 @@ def content_generation_page():
                     'next_page_suggestion': "\n".join(st.session_state.pages[st.session_state.current_page -1]['next_suggestions']) if st.session_state.current_page > 0  else ''
                 }
             )
-
+            
+            data = response.json()
+            page['content'] = data['content']
             if response.status_code == 200:
-                data = response.json()
-                page['content'] = data['content']
+                print(data['key_developments'])
                 page['key_developments'] = data['key_developments']
                 page['next_suggestions'] = data['next_suggestions']
                 
+        st.text_area("Page Content:", value=page['content'], height=400, key=f"content_{page['number']}")
 
-        new_content = st.text_area("Page Content:", value=page['content'], height=400, key=f"content_{page['number']}")
-
-        if new_content != page['content']:
-            page['content'] = new_content
 
         cols = st.columns([1, 3, 1])
         with cols[0]:
