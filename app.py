@@ -131,39 +131,55 @@ def generate_page():
     try:
         print(data.get('previous_development', 'None'))
         prompt = f"""
-        Story:  {data['main_title']} - {data['description']}
-        All page titles: {', '.join(data['all_titles'])}
-        Characters: {', '.join(data['characters'])}
+        You are an AI-powered comic script generator. Your task is to generate the content for a specific page of a comic book while ensuring narrative continuity, engaging character interactions, and maintaining the established tone of the story. Do not include any explanations, introductions, or extra text outside the specified format.
 
-        For the above mentioned comic story you have to Generate content for the page: {data['current_title']}.
-        Assume all the previous pages are aldready generated and the current page should be in continuation with the previous pages.the previous page development and the current page direction from the previous page is provided.
-        Based on them and the description for the current page, you have to generate the content and also mention the key development in this page and suggestions for the next page content.
-        Previous page Development: {data.get('previous_development', 'None')}
-        current Page Direction from the previous page: {data.get('next_page_suggestion', 'Continue naturally')}
-        current Page Description: {data['current_description']}
-        strictly the output need to be in the follwing format.
-        Output Format:
-        **Page Content**
-        [character1_name : character content]
-        [character2_name : character content](5-15 dialogue exchanges with name of the characters)
-        .
-        .
-        .
+        ### Comic Story Details:
+        - **Title:** {data['main_title']}
+        - **Story Overview:** {data['description']}
+        - **List of All Page Titles:** {', '.join(data['all_titles'])}
+        - **Key Characters:** {', '.join(data['characters'])}
 
-        **Key Developments**
-        - [Important plot point 1]
-        - [Important plot point 2]
-        - [Important plot point 3]
-        .
-        .
-        .
-        **Next Page Suggestions**
-        [What should happen in next page(2-3 ideas)]
-        .
-        .
-        .
+        ### Page to be Generated:
+        - **Current Page Title:** {data['current_title']}
+        - **Previous Page Summary:** {data.get('previous_development', 'None')}
+        - **Current Page Direction:** {data.get('next_page_suggestion', 'Continue naturally')}
+        - **Current Page Description:** {data['current_description']}
 
+        Your response **must strictly follow the format below**. Do not add any extra text, explanations, or modifications.
+
+        ---
+
+        **Page Content:**  
+        [Character 1]: "Dialogue line 1"  
+        [Character 2]: "Dialogue line 2"  
+        [Character 1]: "Dialogue line 3"  
+        [Character 3]: "Dialogue line 4"  
+        ... (5-15 dialogue exchanges ensuring smooth character interactions and progress in the plot)  
+
+        **Key Developments:**  
+        - [Important plot point 1]  
+        - [Important plot point 2]  
+        - [Important plot point 3]  
+        (Highlight the major events that happen in this page)  
+
+        **Next Page Suggestions:**  
+        - Idea 1: [Possible next event]  
+        - Idea 2: [Possible next event]  
+        - Idea 3: [Possible next event]  
+        (Provide 2-3 engaging ideas that build upon this page)  
+
+        ---
+
+        **Rules to Follow:**  
+        - **Do not include any extra text, explanations, or modifications.**  
+        - **Strictly follow the output format.**  
+        - **Maintain continuity with previous pages.**  
+        - **Ensure character dialogues stay true to their personalities.**  
+        - **Ensure smooth storytelling and engaging interactions.**  
+
+        Now, generate the comic page content in the specified format only.
         """
+
         
         response = ollama.generate(
             model='llama3.2',
