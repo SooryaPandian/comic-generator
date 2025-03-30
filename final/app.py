@@ -2,16 +2,50 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 import ollama
 import re
+import requests
+import base64
+import json
 
 app = Flask(__name__)
 CORS(app)
+@app.route('/generate/image', methods=['POST'])
+def generate_image():
+    data = request.json
+    try:
+        url = "http://localhost:7860/sdapi/v1/txt2img"
 
+        # Payload with generation parameters
+        payload = {
+            "prompt": f"{data['prompt']}",
+            "negative_prompt": "Incorrect colors, extra limbs, blurry, distorted details, unrealistic anatomy, low resolution, washed-out colors, overexposed, unnatural lighting, ugly, dull.",
+            "steps": 30,
+            "sampler_index": "Euler a",
+            "cfg_scale": 7,
+            "width": 512,
+            "height": 512,
+            "seed": -1,  # -1 for random seed
+            "override_settings": {
+                "sd_model_checkpoint": "dreamshaper_8.safetensors"
+            }
+        }
+        response = requests.post(url, json=payload)
+        if response.status_code == 200:
+            result = response.json()
+            image_data = result['images'][0]
+            return jsonify({'image': image_data})
+        else:
+            print("Error:", response.text)
+            return jsonify({'error': response.text}), 500
+    
+    except Exception as e:
+        print(e)
+        return jsonify({'error': str(e)}), 500
 @app.route('/generate/story', methods=['POST'])
 def generate_story_elements():
     data = request.json
     try:
         # Generate main title if needed
-        # print('generate_title', data.get('generate_title'))
+      
         if data.get('generate_title'):
             title_prompt = f'''
             Generate a random title for a commic along with description.
@@ -30,8 +64,7 @@ def generate_story_elements():
             response = title_response['response'].strip().replace('"', '')
             main_title = response.split('\n')[0]
             description= "".join(response.split('\n')[1:])
-            # print("This is the generate title",main_title ),
-            # print("This is the generate description",response)
+
         else:
             main_title = data['title']
             description = data['description']
@@ -90,7 +123,7 @@ def generate_story_elements():
                 titles.append(line.split('. ', 1)[-1].strip())
             elif current_section == 'descriptions' and re.match(r'\d+\.', line):
                 page_descriptions.append(line.split('. ', 1)[-1].strip())  
-        # print("This is the page descriptions", page_descriptions)
+
         return jsonify({
             'main_title': main_title,
             'description': description,
@@ -127,9 +160,8 @@ def regenerate_single_title():
 @app.route('/generate/page', methods=['POST'])
 def generate_page():
     data = request.json
-    # print("this is the data",data)
+
     try:
-        print(data.get('previous_development', 'None'))
         prompt = f"""
         You are an AI-powered comic script generator. Your task is to generate the content for a specific page of a comic book while ensuring narrative continuity, engaging character interactions, and maintaining the established tone of the story. Do not include any explanations, introductions, or extra text outside the specified format.
 
@@ -178,7 +210,14 @@ def generate_page():
         - Idea 1: [Possible next event]  
         - Idea 2: [Possible next event]  
         - Idea 3: [Possible next event]  
-        (Provide 2-3 engaging ideas that build upon this page)  
+        (Provide 2-3 engaging ideas that build upon this page) 
+
+        **Image Prompts:**
+        - [Description of visual for panel 1]
+        - [Description of visual for panel 2]
+        - [Description of visual for panel 3]
+        - [Description of visual for panel 4]
+        (Provide 4-5 detailed visual descriptions for comic panels) 
 
         ---
         """
@@ -191,11 +230,11 @@ def generate_page():
         )
         
         content = response['response'].strip()
-        print("this is the content",content)
         sections = {
             'content': '',
             'key_developments': [],
-            'next_suggestions': []
+            'next_suggestions': [],
+            'image_prompts': []
         }
 
         current_section = None
@@ -206,20 +245,23 @@ def generate_page():
                 current_section = 'key_developments'
             elif 'next page suggestions' in line.lower():
                 current_section = 'next_suggestions'
+            elif 'image prompts' in line.lower():
+                current_section = 'image_prompts'
             elif current_section == 'content':
                 sections['content'] += line + '\n'
             elif current_section == 'key_developments':
                 sections['key_developments'].append(line.strip())
             elif current_section == 'next_suggestions':
-                if line.strip():
-                # if line.strip() and not line.startswith('**'):
-                    sections['next_suggestions'].append(line.strip())
+                sections['next_suggestions'].append(line.strip())
+            elif current_section == 'image_prompts':
+                sections['image_prompts'].append(line.strip())
                 
-        
+        print(sections['image_prompts'])
         return jsonify({
             'content': sections['content'].strip(),
             'key_developments': sections['key_developments'],
-            'next_suggestions': sections['next_suggestions']
+            'next_suggestions': sections['next_suggestions'],
+            'image_prompts': sections['image_prompts']
         })
         
     except Exception as e:

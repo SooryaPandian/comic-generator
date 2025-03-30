@@ -2,6 +2,9 @@ import streamlit as st
 import requests
 from fpdf import FPDF
 import os
+from PIL import Image
+import base64
+from io import BytesIO
 
 # Backend API URL
 BACKEND_URL = "http://localhost:5000"
@@ -15,7 +18,8 @@ def init_session():
         'pages': [],
         'current_page': 0,
         'titles_finalized': False,
-        'generation_complete': False
+        'generation_complete': False,
+        'generated_images': {}  # Add image storage
     }
     for key, value in session_defaults.items():
         if key not in st.session_state:
@@ -209,6 +213,7 @@ def content_generation_page():
                 print(data['key_developments'])
                 page['key_developments'] = data['key_developments']
                 page['next_suggestions'] = data['next_suggestions']
+                page['image_prompts']= data.get('image_prompts', [])
 
             progress_bar.progress((i + 1) / len(st.session_state.pages))  # Update progress
 
@@ -263,25 +268,62 @@ def content_generation_page():
             data = response.json()
             page['content'] = data['content']
             if response.status_code == 200:
-                print(data['key_developments'])
+                # print(data['key_developments'])
                 page['key_developments'] = data['key_developments']
                 page['next_suggestions'] = data['next_suggestions']
-                
-        st.text_area("Page Content:", value=page['content'], height=400, key=f"content_{page['number']}")
+                page['image_prompts']= data.get('image_prompts', [])
+            print("this is image prompts",page['image_prompts'])
+            # Generate images after content is received
+            st.text_area("Page Content:", value=page['content'], height=400, key=f"content_{page['number']}")
+            if page['image_prompts'] and not st.session_state.generated_images.get(str(page['number'])):
+                with st.spinner(f"Generating images for page {page['number']}..."):
+                    page_images = []
+                    for img_prompt in page['image_prompts']:
+                        img_response = requests.post(
+                            f"{BACKEND_URL}/generate/image",
+                            json={
+                                'prompt': f"Graphic novel panel. {img_prompt} "
+                                          f"Style: {st.session_state.main_title}. "
+                                          "Detailed, dynamic angles, vivid colors. "
+                                          "Include speech bubbles space."
+                            }
+                        )
+                        if img_response.status_code == 200:
+                            page_images.append(img_response.json()['image'])
+                    st.session_state.generated_images[str(page['number'])] = page_images
+        
+        # Display images
+        if st.session_state.generated_images.get(str(page['number'])):
+            st.subheader("Comic Panels")
+            cols = st.columns(4)
+            for idx, img_data in enumerate(st.session_state.generated_images[str(page['number'])]):
+                    st.image(Image.open(BytesIO(base64.b64decode(img_data))))
+                    # st.image(Image.open(BytesIO(base64.b64decode(img_data))))
+                    if st.button(f"↻ Regenerate Panel {idx+1}", key=f"regen_{page['number']}_{idx}"):
+                        new_response = requests.post(
+                            f"{BACKEND_URL}/generate/image",
+                            json={
+                                'prompt': page['image_prompts'][idx] + 
+                                " Improve details and maintain style consistency."
+                            }
+                        )
+                        if new_response.ok:
+                            st.session_state.generated_images[str(page['number'])][idx] = new_response.json()['image']
+                            st.rerun()                
 
 
-        cols = st.columns([1, 3, 1])
-        with cols[0]:
-            if st.button("🔄 Regenerate"):
-                page['content'] = ""
-                st.rerun()
-        with cols[2]:
-            next_text = "Finish" if page['number'] == len(st.session_state.pages) else "Next Page →"
-            if st.button(next_text):
-                if page['number'] == len(st.session_state.pages):
-                    st.session_state.generation_complete = True
-                st.session_state.current_page += 1
-                st.rerun()
+            cols = st.columns([1, 3, 1])
+            with cols[0]:
+                if st.button("🔄 Regenerate"):
+                    page['content'] = ""
+                    st.rerun()
+            with cols[2]:
+                next_text = "Finish" if page['number'] == len(st.session_state.pages) else "Next Page →"
+                if st.button(next_text):
+                    if page['number'] == len(st.session_state.pages):
+                        st.session_state.generation_complete = True
+                    st.session_state.current_page += 1
+                    st.rerun()
 
 
 
