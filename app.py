@@ -5,14 +5,16 @@ import re
 import requests
 import base64
 import json
+from config import OLLAMA_MODEL_NAME, IMAGE_GENERATION_URL  # Import configuration
 
 app = Flask(__name__)
 CORS(app)
+
 @app.route('/generate/image', methods=['POST'])
 def generate_image():
     data = request.json
     try:
-        url = "http://localhost:7860/sdapi/v1/txt2img"
+        url = IMAGE_GENERATION_URL  # Use URL from config
 
         # Payload with generation parameters
         payload = {
@@ -41,6 +43,7 @@ def generate_image():
 
         print(e)
         return jsonify({'error': str(e)}), 500
+
 @app.route('/generate/story', methods=['POST'])
 def generate_story_elements():
     data = request.json
@@ -59,7 +62,7 @@ def generate_story_elements():
             **Description**: [Description]
             '''
             title_response = ollama.generate(
-                model='llama3.2',
+                model=OLLAMA_MODEL_NAME,  # Use model name from config
                 prompt=title_prompt,
                 options={'temperature': 0.8}
             )
@@ -90,7 +93,7 @@ def generate_story_elements():
         ...
         """
         response = ollama.generate(
-            model='llama3.2',
+            model=OLLAMA_MODEL_NAME,  # Use model name from config
             prompt=story_prompt,
             options={'temperature': 0.7, 'num_predict': 1024}
         )
@@ -142,7 +145,7 @@ def regenerate_single_title():
         Maintain story continuity. Return ONLY the new page title text."""
 
         response = ollama.generate(
-            model='llama3.2',
+            model=OLLAMA_MODEL_NAME,  # Use model name from config
             prompt=prompt,
             options={'temperature': 0.7}
         )
@@ -220,7 +223,7 @@ def generate_page():
 
         
         response = ollama.generate(
-            model='llama3.2',
+            model=OLLAMA_MODEL_NAME,  # Use model name from config
             prompt=prompt,
             options={'temperature': 0.6, 'num_predict': 1024}
         )
