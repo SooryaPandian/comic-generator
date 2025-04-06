@@ -48,12 +48,11 @@ def generate_image():
 def generate_story_elements():
     data = request.json
     try:
-        
-
         # Generate main title if needed
         if data.get('generate_title'):
+            print(data.get('description','generate random title') + data['title'])
             title_prompt = f'''
-            user description/title: {data['description'] + data['title']}
+            user description/title: {data.get('description','generate random title') + data['title']}
             Generate a random title or enhance the given title for a comic along with description.
             As this is used for showing in a web UI, not in a chat UI, do not include any extra wordings to explain the content to the user.
             It should strictly follow the below format.
@@ -76,59 +75,70 @@ def generate_story_elements():
         # Generate page titles and characters
         story_prompt = f"""
         Create a comic book story framework titled "{main_title}".
+        you have to create prompts generating each page, all the page should have the detailed description of the page.
+        The story should be engaging, with a clear plot and character development.
         Description: {description}
         Number of pages: {data.get('pagesCount', 10)}.
-        Character suggested by the user: {', '.join(data['characters'])}. 
-        The generated titles should follow the story flow, with the first few pages introducing the story and the last few pages concluding it.
-        As this is used for showing in a web UI, do not include any extra wordings to explain the content to the user. Use the format below.
-        Output format:
-        Characters:
-        1. [Character Name] - [Role/Description]
-        ...
-        Page Titles:
-        1. [Title 1]
-        ...
-        Page Descriptions:
-        1. [Page Description 1]
-        ...
+        Character suggested by the user: {', '.join(data['characters'])}.
+
+        Return STRICTLY in this JSON format (NO OTHER TEXT):
+        {{
+        "characters": ["Character 1 - Description", "Character 2 - Description", ...],
+        "pages": [
+            {{
+            "pageTitle": "Title 1",
+            "prompt": "Detailed prompt to generate the content of this page"
+            }},
+            ...
+        ]
+        }}
+
+        Rules:
+        1. Use ONLY these 2 keys:  characters, pages
+        2. The "pages" array must contain exactly {data.get('pagesCount', 10)} items
+        3. Each item inside "pages" must have:
+        - "pageTitle": short, creative title for the comic page
+        - "prompt": detailed description to generate visuals + narration
+        4. DO NOT include markdown or explanation. Just clean, parsable JSON.
         """
+
         response = ollama.generate(
-            model=OLLAMA_MODEL_NAME,  # Use model name from config
+            model=OLLAMA_MODEL_NAME,
             prompt=story_prompt,
             options={'temperature': 0.7, 'num_predict': 1024}
         )
 
-        content = response['response'].strip()
-        characters = []
-        titles = []
-        page_descriptions = []
+        try:
+            # Directly parse the response without transformation
+           
+            response_data = json.loads(response['response'].strip())
+            # Validate structure
+            required_keys = ['characters', 'pages']
+            if not all(key in response_data for key in required_keys):
+                raise ValueError("Missing required keys in response")
 
-        # Parse response
-        current_section = None
-        for line in content.split('\n'):
-            if 'characters:' in line.lower():
-                current_section = 'characters'
-            elif 'page titles:' in line.lower():
-                current_section = 'titles'
-            elif 'page descriptions:' in line.lower():
-                current_section = 'descriptions'
-            elif line.startswith('--'):
-                current_section = None
-            elif current_section == 'characters' and re.match(r'\d+\.', line):
-                characters.append(line.split('. ', 1)[-1].strip())
-            elif current_section == 'titles' and re.match(r'\d+\.', line):
-                titles.append(line.split('. ', 1)[-1].strip())
-            elif current_section == 'descriptions' and re.match(r'\d+\.', line):
-                page_descriptions.append(line.split('. ', 1)[-1].strip())
-        
-        return jsonify({
-            'main_title': main_title,
-            'description': description,
-            'characters': characters,  # Limit to 5 main characters
-            'titles': titles,  # Ensure correct number of titles
-            'descriptions': page_descriptions  # Match titles count
-        })
+            # Ensure array lengths match
+            # page_count = data.get('pagesCount', 10)
+            # response_data['titles'] = response_data['titles']
+            # response_data['descriptions'] = response_data['descriptions']
+                        
+            titles = [p['pageTitle'] for p in response_data['pages']]
+            print("Requested number of pages:", data.get('pagesCount', 10),"\n generated number of pages:", len(titles))
+            descriptions = [p['prompt'] for p in response_data['pages']]
+            # Keep original frontend structure
+            return jsonify({
+                'main_title': main_title,
+                'description': description,
+                'characters': response_data['characters'],  # Limit to 5 characters
+                'titles': titles,
+                'descriptions': descriptions,
+            })
 
+        except json.JSONDecodeError:
+            # Fallback to original parsing logic if JSON fails
+            content = response['response'].strip()
+            print({'error': str(json.JSONDecodeError)})
+            return jsonify({'error': str(json.JSONDecodeError)}), 500
     except Exception as e:
         print(e)
         return jsonify({'error': str(e)}), 500
@@ -159,6 +169,7 @@ def regenerate_single_title():
 @app.route('/generate/page', methods=['POST'])
 def generate_page():
     data = request.json
+    print(data)
     try:
         prompt = f"""
         You are an AI-powered comic script generator. Your task is to generate the content for a specific page of a comic book while ensuring narrative continuity, engaging character interactions, and maintaining the established tone of the story. Do not include any explanations, introductions, or extra text outside the specified format.
@@ -166,23 +177,22 @@ def generate_page():
         ### Comic Story Details:
         - **Title:** {data['main_title']}
         - **Story Overview:** {data['description']}
-        - **List of All Page Titles:** {', '.join(data['all_titles'])}
         - **Key Characters:** {', '.join(data['characters'])}
 
         ### Page to be Generated:
         - **Current Page Title:** {data['current_title']}
         - **Previous Page Summary:** {data.get('previous_development', 'None')}
         - **Current Page Direction:** {data.get('next_page_suggestion', 'Continue naturally')}
-        - **Current Page Description:** {data['current_description']}
+        - **Current Page Prompt:** {data['current_description']}
 
         Your response **must strictly follow the format below**. Do not add any extra text, explanations, or modifications.
         **Rules to Follow:**  
         - **Do not include any extra text, explanations, or modifications.**  
-        - **Strictly follow the output format.**  
-        - **Maintain continuity with previous pages.**  
+        - **Strictly follow the output format.**   
         - **Ensure character dialogues stay true to their personalities.**  
-        - **Ensure smooth storytelling and engaging interactions.**  
-
+        - **Ensure smooth storytelling and engaging interactions.** 
+        generate the content based on the current page number and current page prompt provided. 
+        Strictly follow the below format for the output.don't add any extra text or explanation, or panels within the content section
         Now, generate the comic page content in the below specified format only.
         ---
         ---
@@ -255,7 +265,6 @@ def generate_page():
             elif current_section == 'image_prompts'and line!= '':
                 sections['image_prompts'].append(line.strip())
                 
-        print(content)
         return jsonify({
             'content': sections['content'].strip(),
             'key_developments': sections['key_developments'],

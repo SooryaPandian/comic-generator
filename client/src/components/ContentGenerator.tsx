@@ -52,7 +52,13 @@ const ContentGenerator: React.FC = () => {
   
     try {
       setIsGenerating(true);
-  
+       console.log({pageNumber: currentPageNumber,
+        title: currentPage.title,
+        pages:state.pages.map(page => page.title),
+        description: state.description,
+        characters: state.characters,
+        previousDevelopment: state.page.find(p => p.number === currentPageNumber-1)?.keyDevelopments || '',
+        nextPageSuggestion: state.page.find(p=>p.number === currentPageNumber-1)?.nextSuggestions || '',})
       const response = await API.generatePageContent({
         pageNumber: currentPageNumber,
         title: currentPage.title,
